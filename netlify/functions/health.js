@@ -1,9 +1,9 @@
-exports.handler = async (event, context) => {
+exports.handler = async () => {
   return {
     statusCode: 200,
-    body: JSON.stringify({ 
-      ok: true, 
-      model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' 
+    body: JSON.stringify({
+      ok: true,
+      model: process.env.NVIDIA_MODEL || 'google/gemma-4-31b-it'
     })
   };
 };

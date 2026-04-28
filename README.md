@@ -6,8 +6,8 @@
 <!-- Badges Row 1 -->
 <p>
   <img src="https://img.shields.io/badge/Status-Live%20on%20Netlify-34d399?style=for-the-badge&logo=netlify&logoColor=white" />
-  <img src="https://img.shields.io/badge/AI-Google%20Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white" />
-  <img src="https://img.shields.io/badge/Fallback-NVIDIA%20NIM-76b900?style=for-the-badge&logo=nvidia&logoColor=white" />
+  <img src="https://img.shields.io/badge/AI-NVIDIA%20NIM-76b900?style=for-the-badge&logo=nvidia&logoColor=white" />
+  <img src="https://img.shields.io/badge/Model-Gemma%204%2031B-00a86b?style=for-the-badge&logo=google&logoColor=white" />
 </p>
 
 <!-- Badges Row 2 -->
@@ -25,7 +25,7 @@
 </h3>
 
 <p>
-  EcoScan is an <strong>AI-powered waste intelligence platform</strong> that instantly identifies any waste item from an image or description, computes its real environmental footprint, and generates step-by-step upcycle projects you can actually build — all powered by <strong>Google Gemini</strong>.
+  EcoScan is an <strong>AI-powered waste intelligence platform</strong> that instantly identifies any waste item from an image or description, computes its real environmental footprint, and generates step-by-step upcycle projects you can actually build — all powered by <strong>NVIDIA NIM (Gemma 4 31B)</strong>.
 </p>
 
 <br/>
@@ -47,7 +47,7 @@
 
 | Feature | Description |
 |:---|:---|
-| 🔍 **AI Waste Scanner** | Upload a photo or pick a sample — Gemini identifies the item, its waste type, recyclability & CO₂ savings in seconds |
+| 🔍 **AI Waste Scanner** | Upload a photo or pick a sample — NVIDIA NIM (Gemma 4 31B) identifies the item, its waste type, recyclability & CO₂ savings in seconds |
 | 🧪 **Material Breakdown** | 4–6 material layers with percentage bars, toxicity flags, and recoverability scores |
 | 💡 **3 Upcycle Ideas** | Step-by-step DIY projects per scan, filterable by Easy / Medium / Hard difficulty |
 | 🗺️ **Global Heatmap** | Leaflet.js live heatmap plotting every scan you do on a real world map |
@@ -74,19 +74,19 @@
                             ┌───────────▼────────────┐
                             │   Netlify Functions     │
                             │  netlify/functions/     │
-                            │  └─ gemini.js           │
+                            │  └─ scan.js             │
                             └───────────┬────────────┘
                                ┌────────┴───────────┐
                                │                    │
-                   ┌───────────▼──────┐  ┌──────────▼────────┐
-                   │  Google Gemini   │  │   NVIDIA NIM       │
-                   │  (Primary AI)    │  │  (Fallback on 429) │
-                   └──────────────────┘  └───────────────────┘
+                    ┌───────────────────────────────────┐
+                    │        NVIDIA NIM                  │
+                    │  google/gemma-4-31b-it (Primary)   │
+                    └───────────────────────────────────┘
 ```
 
 - **Frontend** — Pure HTML, CSS & vanilla JS single-page app, zero dependencies bundled
-- **Serverless Backend** — One Netlify Function per route (`/api/gemini`, `/api/health`)
-- **AI layer** — Gemini 2.5 Flash as primary; auto-falls back to NVIDIA NIM on rate-limit
+- **Serverless Backend** — One Netlify Function per route (`/api/scan`, `/api/health`)
+- **AI layer** — NVIDIA NIM (`google/gemma-4-31b-it`) as the sole AI provider
 - **Map layer** — Leaflet.js + Leaflet.heat, all data stored in `localStorage` (never a server)
 
 ---
@@ -95,7 +95,7 @@
 
 ### Prerequisites
 - **Node.js 18+** — built-in `fetch` required
-- A **Google Gemini API key** — [Get one free](https://aistudio.google.com/app/apikey)
+- An **NVIDIA NIM API key** — [Get one free](https://build.nvidia.com/)
 
 ### 1. Clone
 
@@ -114,10 +114,8 @@ cp .env.example .env
 Open `backend/.env` and fill in:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash         # optional, this is the default
-NVIDIA_API_KEY=your_nvidia_key_here   # optional fallback
-NVIDIA_MODEL=google/gemma-4-31b-it    # optional fallback model
+NVIDIA_API_KEY=your_nvidia_nim_key_here
+NVIDIA_MODEL=google/gemma-4-31b-it    # optional, this is the default
 PORT=3000
 ```
 
@@ -148,7 +146,7 @@ The repo ships with a ready-made `netlify.toml`. All you need to do is:
 npm install -g netlify-cli   # once
 
 netlify link                 # link to your Netlify site
-netlify env:set GEMINI_API_KEY your_key_here
+netlify env:set NVIDIA_API_KEY your_nvidia_nim_key_here
 netlify deploy --prod
 ```
 
@@ -161,9 +159,8 @@ netlify deploy --prod
 
 | Key | Value |
 |---|---|
-| `GEMINI_API_KEY` | *(your Gemini key)* |
-| `GEMINI_MODEL` | `gemini-2.5-flash` |
-| `NVIDIA_API_KEY` | *(optional fallback)* |
+| `NVIDIA_API_KEY` | *(your NVIDIA NIM key)* |
+| `NVIDIA_MODEL` | `google/gemma-4-31b-it` *(optional)* |
 
 5. Click **Deploy** — your app is live ✅
 
@@ -180,11 +177,11 @@ Ecoscan/
 │
 ├── netlify/
 │   └── functions/            # Serverless API (replaces Express on Netlify)
-│       ├── gemini.js         # POST /api/gemini — proxies Gemini + NVIDIA fallback
+│       ├── gemini.js         # POST /api/gemini — proxies to NVIDIA NIM
 │       └── health.js         # GET  /api/health — uptime check
 │
 ├── backend/                  # Local dev Express server (equivalent of above)
-│   ├── server.js             # Express + Gemini proxy + NVIDIA fallback
+│   ├── server.js             # Express + NVIDIA NIM proxy
 │   ├── package.json
 │   └── .env.example          # Template for required env vars
 │
@@ -202,20 +199,13 @@ sequenceDiagram
     participant U as User
     participant F as Frontend (app.js)
     participant N as Netlify Function
-    participant G as Gemini AI
     participant NV as NVIDIA NIM
 
     U->>F: Upload image / pick sample
     F->>N: POST /api/gemini {prompt, image?}
-    N->>G: generateContent (gemini-2.5-flash)
-    alt Gemini OK
-        G-->>N: JSON with item analysis
-        N-->>F: { text: "..." }
-    else Rate limited (429)
-        N->>NV: chat completions fallback
-        NV-->>N: text response
-        N-->>F: { text: "..." }
-    end
+    N->>NV: chat completions (google/gemma-4-31b-it)
+    NV-->>N: JSON with item analysis
+    N-->>F: { text: "..." }
     F->>F: parseJsonStrict() → normalizeResult()
     F-->>U: Render results screen
 ```
@@ -255,7 +245,7 @@ EcoScan uses a rich, custom dark-mode design system with:
 
 ## 🔒 Privacy & Security
 
-- **API key never exposed** — Gemini key lives only in server-side environment variables; the browser never sees it
+- **API key never exposed** — NVIDIA NIM key lives only in server-side environment variables; the browser never sees it
 - **All user data stays local** — Scan history, location, and streaks are stored in `localStorage` only; nothing is sent to any database
 - **Location is optional** — The heatmap works without location; it's requested only if you choose to enable it
 
