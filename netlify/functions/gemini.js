@@ -7,6 +7,7 @@
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
 const NVIDIA_MODEL = process.env.NVIDIA_MODEL || 'meta/llama-3.2-90b-vision-instruct';
 const NVIDIA_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
+const IS_DEV = process.env.NETLIFY_DEV === 'true' || !NVIDIA_API_KEY || NVIDIA_API_KEY.includes('your_nvidia_nim_key_here');
 
 /**
  * Build the user message content.
@@ -38,6 +39,45 @@ function buildMessages(prompt, image) {
 }
 
 async function callNvidia(prompt, image) {
+  // Development mock response
+  if (IS_DEV) {
+    console.log('DEV MODE: Returning mock response for:', prompt.substring(0, 50));
+    await new Promise(r => setTimeout(r, 500)); // Simulate delay
+    return JSON.stringify({
+      itemName: 'Plastic Bottle',
+      wasteType: 'plastic',
+      recyclable: 'Yes',
+      decomposeTime: '450 years',
+      co2SavedKg: 0.25,
+      confidencePct: 92,
+      upcycleIdeas: [
+        {
+          title: 'Bird Feeder',
+          description: 'Turn bottle into a hanging bird feeder',
+          difficulty: 'Easy',
+          timeEstimate: '30 minutes',
+          steps: ['Cut bottle', 'Add perch', 'Fill seeds', 'Hang']
+        },
+        {
+          title: 'Plant Pot',
+          description: 'Use as a small plant container',
+          difficulty: 'Easy',
+          timeEstimate: '15 minutes',
+          steps: ['Cut top', 'Add soil', 'Plant seedling', 'Water']
+        },
+        {
+          title: 'Pencil Holder',
+          description: 'Decorate and use for stationery',
+          difficulty: 'Medium',
+          timeEstimate: '1 hour',
+          steps: ['Clean', 'Paint', 'Decorate', 'Dry']
+        }
+      ],
+      disposalTip: 'Rinse and place in recycling bin. Remove cap and label if possible.',
+      funFact: 'Recycling one plastic bottle saves enough energy to power a 60W light bulb for 6 hours.'
+    });
+  }
+
   if (!NVIDIA_API_KEY) throw new Error('NVIDIA_API_KEY not configured on server.');
 
   const messages = buildMessages(prompt, image);
@@ -66,7 +106,7 @@ async function callNvidia(prompt, image) {
     try {
       const j = await response.json();
       msg = j.error?.message || j.detail || msg;
-    } catch (_) {}
+    } catch (_) { }
     throw new Error(msg);
   }
 

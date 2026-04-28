@@ -1,0 +1,9 @@
+{
+    "name": "ecoscan-netlify-functions",
+    "version": "1.0.0",
+    "description": "Netlify functions for EcoScan",
+    "engines": {
+        "node": ">=18"
+    },
+    "dependencies": {}
+}
