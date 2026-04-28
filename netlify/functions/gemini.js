@@ -1,119 +1,154 @@
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+/**
+ * EcoScan — AI backend function
+ * Primary provider: NVIDIA NIM (google/gemma-4-31b-it)
+ * Endpoint called from frontend as /api/gemini
+ */
+
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
 const NVIDIA_MODEL = process.env.NVIDIA_MODEL || 'google/gemma-4-31b-it';
+const NVIDIA_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
-async function callNvidia(prompt) {
-  if (!NVIDIA_API_KEY) throw new Error('NVIDIA_API_KEY not configured.');
-  const r = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+/**
+ * Build the user message content.
+ * NVIDIA NIM supports multimodal messages via the OpenAI-compatible vision format.
+ * Images are passed as base64 data URLs inside a content array.
+ */
+function buildMessages(prompt, image) {
+  if (image && image.data && image.mimeType) {
+    // Vision-capable models accept content arrays with text + image_url parts
+    return [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: prompt
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${image.mimeType};base64,${image.data}`
+            }
+          }
+        ]
+      }
+    ];
+  }
+  return [{ role: 'user', content: prompt }];
+}
+
+async function callNvidia(prompt, image) {
+  if (!NVIDIA_API_KEY) throw new Error('NVIDIA_API_KEY not configured on server.');
+
+  const messages = buildMessages(prompt, image);
+
+  const response = await fetch(NVIDIA_URL, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${NVIDIA_API_KEY}`,
+      Authorization: `Bearer ${NVIDIA_API_KEY}`,
       'Content-Type': 'application/json',
-      'Accept': 'application/json'
+      Accept: 'application/json'
     },
     body: JSON.stringify({
       model: NVIDIA_MODEL,
-      messages: [{ role: 'user', content: prompt }],
+      messages,
       temperature: 0.4,
       top_p: 0.9,
-      max_tokens: 2048,
-      stream: false
+      max_tokens: 4096,
+      stream: false,
+      // Enable extended thinking for Gemma 4 if supported
+      chat_template_kwargs: { enable_thinking: false }
     })
   });
-  if (!r.ok) {
-    let msg = `NVIDIA error ${r.status}`;
-    try { const j = await r.json(); msg = j.error?.message || j.detail || msg; } catch (_) {}
+
+  if (!response.ok) {
+    let msg = `NVIDIA API error ${response.status}`;
+    try {
+      const j = await response.json();
+      msg = j.error?.message || j.detail || msg;
+    } catch (_) {}
     throw new Error(msg);
   }
-  const data = await r.json();
+
+  const data = await response.json();
   const text = data.choices?.[0]?.message?.content || '';
-  if (!text) throw new Error('Empty response from NVIDIA.');
+  if (!text) throw new Error('Empty response from NVIDIA AI.');
   return text;
 }
 
-exports.handler = async (event, context) => {
-  // Only allow POST
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+exports.handler = async (event) => {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+  };
+
+  // Handle CORS preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers, body: '' };
   }
 
-  if (!GEMINI_API_KEY) {
-    return { statusCode: 500, body: JSON.stringify({ error: 'GEMINI_API_KEY not configured on server.' }) };
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: 'Method Not Allowed' })
+    };
+  }
+
+  if (!NVIDIA_API_KEY) {
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'AI service not configured. Please contact support.' })
+    };
   }
 
   let bodyData;
   try {
     bodyData = JSON.parse(event.body);
-  } catch (e) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+  } catch (_) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ error: 'Invalid JSON body.' })
+    };
   }
 
   const { prompt, image } = bodyData;
   if (!prompt || typeof prompt !== 'string') {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Missing prompt.' }) };
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ error: 'Missing or invalid prompt.' })
+    };
   }
 
-  const parts = [{ text: prompt }];
-  if (image && image.data && image.mimeType) {
-    parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
-  }
+  // Retry logic: up to 2 attempts with a short back-off
+  const MAX_ATTEMPTS = 2;
+  let lastError = null;
 
-  const geminiPayload = {
-    contents: [{ parts }],
-    generationConfig: {
-      temperature: 0.4,
-      topP: 0.9,
-      maxOutputTokens: 2048,
-      responseMimeType: 'application/json'
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      const text = await callNvidia(prompt, image);
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ text })
+      };
+    } catch (err) {
+      lastError = err;
+      // Back off 2 s before retry
+      if (attempt < MAX_ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
     }
+  }
+
+  return {
+    statusCode: 502,
+    headers,
+    body: JSON.stringify({ error: lastError?.message || 'AI request failed. Please try again.' })
   };
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
-
-  const MAX_ATTEMPTS = 3;
-  const BACKOFF_MS = [1500, 4000];
-
-  try {
-    let lastErr = null;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(geminiPayload)
-      });
-
-      if (r.ok) {
-        const data = await r.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        if (!text) return { statusCode: 502, body: JSON.stringify({ error: 'Empty response from AI.' }) };
-        return { statusCode: 200, body: JSON.stringify({ text }) };
-      }
-
-      let msg = `Gemini error ${r.status}`;
-      try { const j = await r.json(); msg = j.error?.message || msg; } catch (_) {}
-      lastErr = { status: r.status, msg };
-
-      if (r.status === 429 && attempt < MAX_ATTEMPTS - 1) {
-        await new Promise(rs => setTimeout(rs, BACKOFF_MS[attempt]));
-        continue;
-      }
-      
-      if (r.status === 429) {
-        if (!image && NVIDIA_API_KEY) {
-          try {
-            const text = await callNvidia(prompt);
-            return { statusCode: 200, body: JSON.stringify({ text }) };
-          } catch (nvErr) {
-            return { statusCode: 429, body: JSON.stringify({ error: 'Both Gemini and NVIDIA failed.' }) };
-          }
-        }
-        return { statusCode: 429, body: JSON.stringify({ error: 'Rate limit reached.' }) };
-      }
-      return { statusCode: r.status, body: JSON.stringify({ error: msg }) };
-    }
-    return { statusCode: lastErr?.status || 500, body: JSON.stringify({ error: lastErr?.msg || 'Request failed.' }) };
-  } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Function execution failed.' }) };
-  }
 };
