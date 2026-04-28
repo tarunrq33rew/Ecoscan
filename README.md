@@ -7,7 +7,7 @@
 <p>
   <img src="https://img.shields.io/badge/Status-Live%20on%20Netlify-34d399?style=for-the-badge&logo=netlify&logoColor=white" />
   <img src="https://img.shields.io/badge/AI-NVIDIA%20NIM-76b900?style=for-the-badge&logo=nvidia&logoColor=white" />
-  <img src="https://img.shields.io/badge/Model-Gemma%204%2031B-00a86b?style=for-the-badge&logo=google&logoColor=white" />
+  <img src="https://img.shields.io/badge/Model-Llama%203.2%2090B%20Vision-00a86b?style=for-the-badge&logo=meta&logoColor=white" />
 </p>
 
 <!-- Badges Row 2 -->
@@ -25,7 +25,7 @@
 </h3>
 
 <p>
-  EcoScan is an <strong>AI-powered waste intelligence platform</strong> that instantly identifies any waste item from an image or description, computes its real environmental footprint, and generates step-by-step upcycle projects you can actually build — all powered by <strong>NVIDIA NIM (Gemma 4 31B)</strong>.
+  EcoScan is an <strong>AI-powered waste intelligence platform</strong> that instantly identifies any waste item from an image or description, computes its real environmental footprint, and generates step-by-step upcycle projects you can actually build — all powered by <strong>NVIDIA NIM (Llama 3.2 90B Vision)</strong>.
 </p>
 
 <br/>
@@ -47,7 +47,7 @@
 
 | Feature | Description |
 |:---|:---|
-| 🔍 **AI Waste Scanner** | Upload a photo or pick a sample — NVIDIA NIM (Gemma 4 31B) identifies the item, its waste type, recyclability & CO₂ savings in seconds |
+| 🔍 **AI Waste Scanner** | Upload a photo or pick a sample — NVIDIA NIM (Llama 3.2 90B Vision) identifies the item, its waste type, recyclability & CO₂ savings in seconds |
 | 🧪 **Material Breakdown** | 4–6 material layers with percentage bars, toxicity flags, and recoverability scores |
 | 💡 **3 Upcycle Ideas** | Step-by-step DIY projects per scan, filterable by Easy / Medium / Hard difficulty |
 | 🗺️ **Global Heatmap** | Leaflet.js live heatmap plotting every scan you do on a real world map |
@@ -80,13 +80,13 @@
                                │                    │
                     ┌───────────────────────────────────┐
                     │        NVIDIA NIM                  │
-                    │  google/gemma-4-31b-it (Primary)   │
+                    │  meta/llama-3.2-90b-vision-instruct(Primary) |
                     └───────────────────────────────────┘
 ```
 
 - **Frontend** — Pure HTML, CSS & vanilla JS single-page app, zero dependencies bundled
 - **Serverless Backend** — One Netlify Function per route (`/api/scan`, `/api/health`)
-- **AI layer** — NVIDIA NIM (`google/gemma-4-31b-it`) as the sole AI provider
+- **AI layer** — NVIDIA NIM (`meta/llama-3.2-90b-vision-instruct`) as the sole AI provider
 - **Map layer** — Leaflet.js + Leaflet.heat, all data stored in `localStorage` (never a server)
 
 ---
@@ -115,7 +115,7 @@ Open `backend/.env` and fill in:
 
 ```env
 NVIDIA_API_KEY=your_nvidia_nim_key_here
-NVIDIA_MODEL=google/gemma-4-31b-it    # optional, this is the default
+NVIDIA_MODEL=meta/llama-3.2-90b-vision-instruct    # optional, this is the default
 PORT=3000
 ```
 
@@ -160,7 +160,7 @@ netlify deploy --prod
 | Key | Value |
 |---|---|
 | `NVIDIA_API_KEY` | *(your NVIDIA NIM key)* |
-| `NVIDIA_MODEL` | `google/gemma-4-31b-it` *(optional)* |
+| `NVIDIA_MODEL` | `meta/llama-3.2-90b-vision-instruct` *(optional)* |
 
 5. Click **Deploy** — your app is live ✅
 
@@ -203,7 +203,7 @@ sequenceDiagram
 
     U->>F: Upload image / pick sample
     F->>N: POST /api/gemini {prompt, image?}
-    N->>NV: chat completions (google/gemma-4-31b-it)
+    N->>NV: chat completions (meta/llama-3.2-90b-vision-instruct)
     NV-->>N: JSON with item analysis
     N-->>F: { text: "..." }
     F->>F: parseJsonStrict() → normalizeResult()
